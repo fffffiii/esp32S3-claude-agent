@@ -1,0 +1,1048 @@
+<!DOCTYPE html>
+<html class="light" lang="zh">
+<head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Whitebox Server Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script>
+tailwind.config = {
+  darkMode: "class",
+  theme: {
+    extend: {
+      colors: {
+        "on-surface": "#181c1a",
+        "on-surface-variant": "#3f4944",
+        "on-secondary-container": "#00714d",
+        "inverse-surface": "#2d312f",
+        "surface-dim": "#d8dbd7",
+        "primary": "#004532",
+        "surface-bright": "#f7faf6",
+        "secondary-fixed-dim": "#4edea3",
+        "error": "#ba1a1a",
+        "surface-variant": "#e0e3df",
+        "tertiary": "#3a3d3e",
+        "on-secondary-fixed": "#002113",
+        "on-tertiary-fixed": "#191c1d",
+        "primary-fixed": "#a6f2d1",
+        "on-error": "#ffffff",
+        "surface": "#f7faf6",
+        "outline-variant": "#bec9c2",
+        "inverse-primary": "#8bd6b6",
+        "inverse-on-surface": "#eef2ed",
+        "secondary": "#006c49",
+        "secondary-fixed": "#6ffbbe",
+        "error-container": "#ffdad6",
+        "outline": "#6f7973",
+        "surface-container-lowest": "#ffffff",
+        "tertiary-fixed": "#e1e3e4",
+        "tertiary-container": "#515455",
+        "primary-container": "#065f46",
+        "surface-container": "#ecefeb",
+        "surface-container-highest": "#e0e3df",
+        "secondary-container": "#6cf8bb",
+        "surface-tint": "#1b6b51",
+        "on-tertiary": "#ffffff",
+        "tertiary-fixed-dim": "#c5c7c8",
+        "on-primary": "#ffffff",
+        "primary-fixed-dim": "#8bd6b6",
+        "background": "#f7faf6",
+        "on-primary-fixed": "#002116",
+        "surface-container-low": "#f1f4f0",
+        "on-primary-fixed-variant": "#00513b",
+        "on-tertiary-container": "#c6c8c9",
+        "on-tertiary-fixed-variant": "#454748",
+        "surface-container-high": "#e6e9e5",
+        "on-secondary": "#ffffff",
+        "on-primary-container": "#8bd6b7",
+        "on-error-container": "#93000a",
+        "on-background": "#181c1a",
+        "on-secondary-fixed-variant": "#005236"
+      },
+      fontFamily: {
+        headline: ["Inter"],
+        body: ["Inter"],
+        code: ["JetBrains Mono"],
+        mono: ["JetBrains Mono"]
+      }
+    }
+  }
+};
+</script>
+<style>
+  .glass-panel {
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(229, 231, 235, 0.5);
+  }
+  /* dots animation for cooking */
+  .dots{display:inline-flex;gap:3px;align-items:center;height:10px}
+  .dots span{width:4px;height:4px;border-radius:50%;background:#92400e;animation:bounce 1.4s infinite}
+  .dots span:nth-child(2){animation-delay:.2s}
+  .dots span:nth-child(3){animation-delay:.4s}
+  @keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-5px)}}
+  .ring{width:10px;height:10px;border-radius:50%;border:2px solid #6d28d9;animation:pulse 1.5s infinite}
+  @keyframes pulse{0%{transform:scale(.7);opacity:1}50%{transform:scale(1.1);opacity:.4}100%{transform:scale(.7);opacity:1}}
+  /* toast */
+  .tts-toast{position:fixed;top:16px;right:16px;padding:10px 18px;border-radius:8px;font-size:12px;font-weight:600;z-index:100;animation:fadeIn .2s}
+  .tts-toast-ok{background:#dcfce7;color:#15803d}
+  .tts-toast-err{background:#fee2e2;color:#991b1b}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+  /* scrollbar */
+  .log-scroll::-webkit-scrollbar{width:4px}
+  .log-scroll::-webkit-scrollbar-thumb{background:#bec9c2;border-radius:4px}
+</style>
+</head>
+<body class="bg-background text-on-background font-body antialiased min-h-screen flex flex-col">
+
+<!-- TopAppBar -->
+<header class="bg-surface/80 backdrop-blur-md text-primary font-headline sticky top-0 z-50 border-b border-outline-variant shadow-sm flex justify-between items-center px-8 h-16 w-full">
+  <div class="flex items-center gap-4">
+    <span class="text-xl font-bold text-primary">Whitebox Server</span>
+    <span class="text-on-surface-variant text-sm ml-4 border-l border-outline-variant pl-4 flex items-center">
+      MQTT 状态监控 + 消息记录
+    </span>
+  </div>
+  <div class="flex items-center gap-4">
+    <div id="mqtt-badge" class="flex items-center gap-2 bg-surface-container px-3 py-1.5 rounded-full text-primary font-mono text-xs">
+      <span class="w-2 h-2 rounded-full bg-outline animate-pulse"></span>
+      Connecting...
+    </div>
+    <span id="clock" class="text-on-surface-variant text-xs font-mono"></span>
+  </div>
+</header>
+
+<div class="flex flex-1 max-w-[1440px] mx-auto w-full">
+  <!-- SideNav -->
+  <nav class="bg-surface-container-low text-primary font-body docked left-0 h-screen w-64 border-r border-outline-variant hidden lg:flex flex-col p-4 gap-2">
+    <div class="mb-6 px-2">
+      <h2 class="text-lg font-semibold text-primary">Whitebox Admin</h2>
+      <p class="text-on-surface-variant text-sm">Technical Operator</p>
+    </div>
+    <ul class="flex flex-col gap-1 flex-1">
+      <li>
+        <a class="flex items-center gap-3 px-3 py-2 bg-secondary-container text-on-secondary-container rounded-lg font-semibold transition-all duration-100" href="#">
+          <span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">dashboard</span>
+          Dashboard
+        </a>
+      </li>
+      <li>
+        <a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-variant/50 rounded-lg transition-all duration-100" href="#">
+          <span class="material-symbols-outlined">router</span>
+          Devices
+        </a>
+      </li>
+      <li>
+        <a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-variant/50 rounded-lg transition-all duration-100" href="#">
+          <span class="material-symbols-outlined">settings</span>
+          Settings
+        </a>
+      </li>
+      <li>
+        <a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-variant/50 rounded-lg transition-all duration-100" href="#">
+          <span class="material-symbols-outlined">terminal</span>
+          Logs
+        </a>
+      </li>
+    </ul>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="flex-1 p-6 md:p-8 flex flex-col gap-6 overflow-y-auto">
+    <div class="grid grid-cols-1 xl:grid-cols-12 gap-6">
+      <!-- Left Column: Status Cards -->
+      <div class="xl:col-span-4 flex flex-col gap-6">
+        <!-- PC Status Card -->
+        <div id="pc-card" class="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm p-6 flex flex-col gap-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+          <h3 class="text-lg font-semibold text-on-surface border-b border-outline-variant pb-2">PC 状态</h3>
+          <div class="text-on-surface-variant text-sm">等待数据...</div>
+        </div>
+        <!-- Device Status Card -->
+        <div id="dev-card" class="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm p-6 flex flex-col gap-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+          <h3 class="text-lg font-semibold text-on-surface border-b border-outline-variant pb-2">设备状态</h3>
+          <div class="text-on-surface-variant text-sm">无设备连接</div>
+        </div>
+        <!-- Device Volume Card -->
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm p-6 flex flex-col gap-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+          <h3 class="text-lg font-semibold text-on-surface border-b border-outline-variant pb-2 flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary">volume_up</span>
+            设备音量
+          </h3>
+          <div class="flex flex-col gap-3">
+            <div class="flex items-center gap-3">
+              <input id="vol-slider" type="range" min="0" max="100" value="70" class="flex-1 accent-primary h-2 rounded-full appearance-none bg-surface-container-high cursor-pointer">
+              <span id="vol-value" class="text-on-surface font-semibold text-lg w-10 text-center">70</span>
+            </div>
+            <div class="flex items-center gap-2 text-xs text-on-surface-variant">
+              <span class="material-symbols-outlined" style="font-size:16px">volume_mute</span>
+              <span class="flex-1"></span>
+              <span class="material-symbols-outlined" style="font-size:16px">volume_up</span>
+            </div>
+            <button onclick="pushVolume()" class="bg-primary text-on-primary px-4 py-2 rounded-lg font-semibold hover:bg-primary/90 transition-colors shadow-sm text-sm">设置音量</button>
+            <div id="vol-status" class="text-xs text-on-surface-variant"></div>
+          </div>
+        </div>
+        <!-- Session 切换 -->
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm p-6 flex flex-col gap-4 hover:shadow-md hover:-translate-y-0.5 transition-all duration-200">
+          <h3 class="text-lg font-semibold text-on-surface border-b border-outline-variant pb-2 flex items-center gap-2">
+            <span class="material-symbols-outlined text-primary">swap_horiz</span>
+            Session 切换
+          </h3>
+          <div class="flex flex-col gap-3">
+            <!-- 模式切换 -->
+            <div class="flex items-center gap-2 bg-surface-container rounded-lg p-2">
+              <button id="mode-all" onclick="setRouteMode('all')" class="flex-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all">
+                竞争模式
+              </button>
+              <button id="mode-single" onclick="setRouteMode('single')" class="flex-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all">
+                锁定模式
+              </button>
+            </div>
+            <div id="route-hint" class="text-xs text-on-surface-variant"></div>
+            <select id="session-select" class="form-select w-full rounded-lg border-outline-variant focus:border-primary focus:ring focus:ring-primary/20 bg-surface-container-lowest text-on-surface h-10 text-sm font-mono">
+              <option value="">加载中...</option>
+            </select>
+            <div class="flex gap-2">
+              <button id="lock-btn" onclick="lockSession()" class="flex-1 bg-primary text-on-primary px-4 py-2 rounded-lg font-semibold hover:bg-primary/90 transition-colors shadow-sm text-sm flex items-center justify-center gap-2" style="display:none">
+                <span class="material-symbols-outlined text-sm">lock</span>
+                锁定所选
+              </button>
+              <button onclick="pushSession()" class="flex-1 bg-surface-container-high text-on-surface px-4 py-2 rounded-lg font-semibold hover:bg-surface-container-highest transition-colors shadow-sm text-sm flex items-center justify-center gap-2">
+                <span class="material-symbols-outlined text-sm">send</span>
+                推送快照
+              </button>
+            </div>
+            <div id="session-status" class="text-xs text-on-surface-variant"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: TTS Configuration -->
+      <div class="xl:col-span-8 flex flex-col gap-6">
+        <div class="glass-panel rounded-xl shadow-sm p-6 flex flex-col gap-6">
+          <div class="flex items-center justify-between border-b border-outline-variant pb-2">
+            <h3 class="text-lg font-semibold text-on-surface">TTS 语音设置</h3>
+            <span id="tts-status-badge"></span>
+          </div>
+          <form class="flex flex-col gap-5" id="tts-form">
+            <!-- Main Settings Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div class="flex flex-col gap-1">
+                <label class="text-on-surface-variant text-sm">启用 TTS</label>
+                <select id="tts-enabled" class="form-select w-full rounded-lg border-outline-variant focus:border-primary focus:ring focus:ring-primary/20 bg-surface-container-lowest text-on-surface h-10">
+                  <option value="true">启用</option>
+                  <option value="false">禁用</option>
+                </select>
+              </div>
+              <div class="flex flex-col gap-1">
+                <label class="text-on-surface-variant text-sm">编排角色</label>
+                <select id="tts-orchestrator" class="form-select w-full rounded-lg border-outline-variant focus:border-primary focus:ring focus:ring-primary/20 bg-surface-container-lowest text-on-surface h-10">
+                  <option value="off">关闭</option>
+                  <option value="server">Server</option>
+                  <option value="local">Local</option>
+                  <option value="both">Both</option>
+                </select>
+              </div>
+              <div class="flex flex-col gap-1">
+                <label class="text-on-surface-variant text-sm">Provider</label>
+                <select id="tts-provider" class="form-select w-full rounded-lg border-outline-variant focus:border-primary focus:ring focus:ring-primary/20 bg-surface-container-lowest text-on-surface h-10">
+                  <option value="local_indextts">本地 IndexTTS</option>
+                  <option value="mqtt_indextts">IndexTTS (MQTT 代理)</option>
+                  <option value="cloud_openai_compatible">云端 OpenAI 兼容</option>
+                  <option value="doubao">豆包 TTS</option>
+                  <option value="mimo">小米 MiMo TTS</option>
+                  <option value="mock">Mock 测试</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Local IndexTTS Group -->
+            <div id="grp-local" class="tts-group hidden bg-surface-container-low rounded-lg p-4 border border-outline-variant/50">
+              <h4 class="text-primary font-semibold text-sm mb-3">本地 IndexTTS</h4>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div class="flex flex-col gap-1">
+                  <label class="text-on-surface-variant text-sm">服务地址</label>
+                  <input type="text" id="tts-local-url" class="form-input w-full rounded-lg border-outline-variant focus:border-primary focus:ring focus:ring-primary/20 bg-surface-container-lowest text-on-surface h-10" placeholder="http://127.0.0.1:9877">
+                </div>
+                <div class="flex flex-col gap-1">
+                  <label class="text-on-surface-variant text-sm">路径</label>
+                  <input type="text" id="tts-local-path" class="form-input w-full rounded-lg border-outline-variant focus:border-primary focus:ring focus:ring-primary/20 bg-surface-container-lowest text-on-surface h-10" placeholder="/tts">
+                </div>
+                <div class="flex flex-col gap-1 md:col-span-2">
+                  <label class="text-on-surface-variant text-sm">Voice</label>
+                  <div class="flex gap-2">
+                    <select id="tts-local-voice" class="form-select flex-1 rounded-lg border-outline-variant focus:border-primary focus:ring focus:ring-primary/20 bg-surface-container-lowest text-on-surface h-10">
+                      <option value="">加载中...</option>
+                    </select>
+                    <button onclick="refreshVoices()" type="button" class="bg-surface-container text-primary border border-outline-variant px-3 rounded-lg hover:bg-surface-variant transition-colors text-sm">刷新</button>
+                  </div>
+                </div>
+                <div class="flex flex-col gap-1 md:col-span-2">
+                  <label class="text-on-surface-variant text-sm">代理地址</label>
+                  <input type="text" id="tts-proxy-url" class="form-input w-full rounded-lg border-outline-variant focus:border-primary focus:ring focus:ring-primary/20 bg-surface-container-lowest text-on-surface h-10" placeholder="http://cc-dashboard公网:5000/api/tts/proxy（留空直连）">
+                </div>
+              </div>
+            </div>
+
+            <!-- Cloud OpenAI Group -->
+            <div id="grp-cloud" class="tts-group hidden bg-surface-container-low rounded-lg p-4 border border-outline-variant/50">
+              <h4 class="text-primary font-semibold text-sm mb-3">云端 OpenAI 兼容</h4>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div class="flex flex-col gap-1">
+                  <label class="text-on-surface-variant text-sm">API 地址</label>
+                  <input type="text" id="tts-cloud-url" class="form-input w-full rounded-lg border-outline-variant focus:border-primary focus:ring focus:ring-primary/20 bg-surface-container-lowest text-on-surface h-10" placeholder="https://api.openai.com">
+                </div>
+                <div class="flex flex-col gap-1">
+                  <label class="text-on-surface-variant text-sm">API Key</label>
+                  <input type="password" id="tts-cloud-key" class="form-input w-full rounded-lg border-outline-variant focus:border-primary focus:ring focus:ring-primary/20 bg-surface-container-lowest text-on-surface h-10" placeholder="sk-...">
+                </div>
+                <div class="flex flex-col gap-1">
+                  <label class="text-on-surface-variant text-sm">模型</label>
+                  <input type="text" id="tts-cloud-model" class="form-input w-full rounded-lg border-outline-variant focus:border-primary focus:ring focus:ring-primary/20 bg-surface-container-lowest text-on-surface h-10" placeholder="tts-1">
+                </div>
+                <div class="flex flex-col gap-1">
+                  <label class="text-on-surface-variant text-sm">语音</label>
+                  <input type="text" id="tts-cloud-voice" class="form-input w-full rounded-lg border-outline-variant focus:border-primary focus:ring focus:ring-primary/20 bg-surface-container-lowest text-on-surface h-10" placeholder="alloy">
+                </div>
+              </div>
+            </div>
+
+            <!-- Doubao Group -->
+            <div id="grp-doubao" class="tts-group hidden bg-surface-container-low rounded-lg p-4 border border-outline-variant/50">
+              <h4 class="text-primary font-semibold text-sm mb-3">豆包 TTS</h4>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div class="flex flex-col gap-1">
+                  <label class="text-on-surface-variant text-sm">API 地址</label>
+                  <input type="text" id="tts-doubao-url" class="form-input w-full rounded-lg border-outline-variant focus:border-primary focus:ring focus:ring-primary/20 bg-surface-container-lowest text-on-surface h-10" placeholder="https://openspeech.bytedance.com/api/v3/tts/unidirectional">
+                </div>
+                <div class="flex flex-col gap-1">
+                  <label class="text-on-surface-variant text-sm">App ID</label>
+                  <input type="text" id="tts-doubao-appid" class="form-input w-full rounded-lg border-outline-variant focus:border-primary focus:ring focus:ring-primary/20 bg-surface-container-lowest text-on-surface h-10">
+                </div>
+                <div class="flex flex-col gap-1">
+                  <label class="text-on-surface-variant text-sm">Access Key</label>
+                  <input type="password" id="tts-doubao-key" class="form-input w-full rounded-lg border-outline-variant focus:border-primary focus:ring focus:ring-primary/20 bg-surface-container-lowest text-on-surface h-10">
+                </div>
+                <div class="flex flex-col gap-1">
+                  <label class="text-on-surface-variant text-sm">Speaker</label>
+                  <input type="text" id="tts-doubao-speaker" class="form-input w-full rounded-lg border-outline-variant focus:border-primary focus:ring focus:ring-primary/20 bg-surface-container-lowest text-on-surface h-10" placeholder="zh_female_xiaohe_uranus_bigtts">
+                </div>
+              </div>
+            </div>
+
+            <!-- MiMo Group -->
+            <div id="grp-mimo" class="tts-group hidden bg-surface-container-low rounded-lg p-4 border border-outline-variant/50">
+              <h4 class="text-primary font-semibold text-sm mb-3">小米 MiMo TTS</h4>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div class="flex flex-col gap-1">
+                  <label class="text-on-surface-variant text-sm">API 地址</label>
+                  <input type="text" id="tts-mimo-url" class="form-input w-full rounded-lg border-outline-variant focus:border-primary focus:ring focus:ring-primary/20 bg-surface-container-lowest text-on-surface h-10" placeholder="https://api.xiaomimimo.com">
+                </div>
+                <div class="flex flex-col gap-1">
+                  <label class="text-on-surface-variant text-sm">API Key</label>
+                  <input type="password" id="tts-mimo-key" class="form-input w-full rounded-lg border-outline-variant focus:border-primary focus:ring focus:ring-primary/20 bg-surface-container-lowest text-on-surface h-10" placeholder="sk-...">
+                </div>
+                <div class="flex flex-col gap-1">
+                  <label class="text-on-surface-variant text-sm">模型</label>
+                  <input type="text" id="tts-mimo-model" class="form-input w-full rounded-lg border-outline-variant focus:border-primary focus:ring focus:ring-primary/20 bg-surface-container-lowest text-on-surface h-10" placeholder="mimo-v2.5-tts">
+                </div>
+                <div class="flex flex-col gap-1">
+                  <label class="text-on-surface-variant text-sm">音色</label>
+                  <select id="tts-mimo-voice" class="form-select w-full rounded-lg border-outline-variant focus:border-primary focus:ring focus:ring-primary/20 bg-surface-container-lowest text-on-surface h-10">
+                    <option value="default">default (默认)</option>
+                    <option value="female">female (女声)</option>
+                    <option value="male">male (男声)</option>
+                    <option value="zh_female">zh_female (中文女)</option>
+                    <option value="zh_male">zh_male (中文男)</option>
+                    <option value="child">child (童声)</option>
+                    <option value="elderly">elderly (老年)</option>
+                    <option value="narrator">narrator (旁白)</option>
+                    <option value="storyteller">storyteller (讲故事)</option>
+                    <option value="xiaoxin">xiaoxin</option>
+                    <option value="xiaomei">xiaomei</option>
+                    <option value="xiaoyi">xiaoyi</option>
+                    <option value="xiaogang">xiaogang</option>
+                    <option value="xiaoming">xiaoming</option>
+                    <option value="yunyang">yunyang</option>
+                    <option value="zhifeng">zhifeng</option>
+                    <option value="daniu">daniu</option>
+                    <option value="laowang">laowang</option>
+                    <option value="guihua">guihua</option>
+                    <option value="chuntian">chuntian</option>
+                    <option value="lingling">lingling</option>
+                    <option value="wanqing">wanqing</option>
+                    <option value="zhongshu">zhongshu</option>
+                    <option value="fengling">fengling</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Mock Group -->
+            <div id="grp-mock" class="tts-group hidden bg-surface-container-low rounded-lg p-4 border border-outline-variant/50">
+              <h4 class="text-primary font-semibold text-sm mb-3">Mock 测试</h4>
+              <div class="flex flex-col gap-1">
+                <label class="text-on-surface-variant text-sm">音频文件</label>
+                <input type="text" id="tts-mock-path" class="form-input w-full rounded-lg border-outline-variant focus:border-primary focus:ring focus:ring-primary/20 bg-surface-container-lowest text-on-surface h-10" placeholder="/path/to/test.mp3">
+              </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex flex-wrap items-center gap-3 pt-2 border-t border-outline-variant/50 tts-actions">
+              <button type="button" id="tts-save-btn" onclick="saveTtsConfig()" class="bg-primary text-on-primary px-6 py-2 rounded-lg font-semibold hover:bg-primary/90 transition-colors shadow-sm">
+                保存配置
+              </button>
+              <button type="button" id="tts-test-btn" onclick="testTts()" class="bg-surface-container text-primary border border-outline-variant px-6 py-2 rounded-lg font-semibold hover:bg-surface-variant transition-colors">
+                测试 TTS
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Hook Upload Logs -->
+        <div class="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm p-6 flex flex-col gap-4 overflow-hidden" style="height:340px">
+          <div class="flex flex-wrap justify-between items-center gap-3 border-b border-outline-variant/50 pb-2">
+            <h3 class="text-lg font-semibold text-on-surface flex items-center gap-2">
+              <span class="material-symbols-outlined text-primary">webhook</span>
+              Hook 上传记录
+              <span id="hook-hist-count" class="text-on-surface-variant text-sm font-normal"></span>
+            </h3>
+            <span class="text-on-surface-variant text-xs">显示本地 cc-dashboard 经 MQTT 同步到云端的 Claude hook 状态</span>
+          </div>
+          <div id="hook-hist" class="flex flex-col gap-2 overflow-y-auto log-scroll pr-1"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TTS Push Logs -->
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl shadow-sm p-6 flex flex-col gap-4 overflow-hidden" style="height:340px">
+      <div class="flex flex-wrap justify-between items-center gap-3 border-b border-outline-variant/50 pb-2">
+        <h3 class="text-lg font-semibold text-on-surface flex items-center gap-2">
+          <span class="material-symbols-outlined text-green-600">volume_up</span>
+          TTS 推送记录
+          <span id="tts-hist-count" class="text-on-surface-variant text-sm font-normal"></span>
+        </h3>
+        <span class="text-on-surface-variant text-xs">TTS 语音合成并推送到硬件的记录</span>
+      </div>
+      <div id="tts-hist" class="flex flex-col gap-2 overflow-y-auto log-scroll pr-1"></div>
+    </div>
+
+    <!-- Bottom: Hardware Publish Logs -->
+    <div class="bg-[#F3F4F6] border border-outline-variant rounded-xl shadow-inner p-6 flex flex-col gap-4 font-code text-xs overflow-hidden" style="height:384px">
+      <div class="flex justify-between items-center border-b border-outline-variant/50 pb-2 mb-2">
+        <h3 class="text-lg font-semibold text-on-surface font-sans">硬件发送记录 <span id="hist-count" class="text-on-surface-variant text-sm font-normal"></span></h3>
+        <span class="text-on-surface-variant font-sans text-xs">仅显示发往 ESP32 的状态（不含 TTS 语音）</span>
+      </div>
+      <div id="hist" class="flex flex-col gap-1 overflow-y-auto log-scroll"></div>
+    </div>
+  </main>
+</div>
+
+<!-- Footer -->
+<footer class="bg-surface-container-lowest text-on-surface-variant font-code text-xs py-4 border-t border-outline-variant flex justify-between items-center px-8 w-full mt-auto">
+  <span>2026 Whitebox Systems</span>
+  <div class="flex gap-4">
+    <a class="text-on-surface-variant hover:text-primary underline opacity-80" href="/api/state" target="_blank">API State</a>
+    <a class="text-on-surface-variant hover:text-primary underline opacity-80" href="/api/tts/health" target="_blank">TTS Health</a>
+  </div>
+</footer>
+
+<script>
+function e(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function ft(iso){
+  if(!iso)return'-';
+  try{return new Date(iso).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'})}
+  catch(x){return iso}
+}
+function statusBadge(s){
+  if(s==='cooking')return'<span class="inline-flex items-center gap-1 bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-xs font-semibold"><span class="dots"><span></span><span></span><span></span></span> Cooking</span>';
+  if(s==='thinking')return'<span class="inline-flex items-center gap-1 bg-purple-100 text-purple-800 px-2 py-0.5 rounded text-xs font-semibold"><span class="ring"></span> Thinking</span>';
+  if(s==='marinating')return'<span class="inline-flex items-center bg-orange-100 text-orange-800 px-2 py-0.5 rounded text-xs font-semibold">Marinating</span>';
+  if(s==='idle')return'<span class="inline-flex items-center bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs font-semibold">Idle</span>';
+  return'<span class="inline-flex items-center bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs font-semibold">'+e(s||'-')+'</span>';
+}
+
+async function api(u){
+  try{return await(await fetch(u,{cache:'no-store'})).json()}
+  catch(x){return{ok:false}}
+}
+
+function renderState(data){
+  const badge=document.getElementById('mqtt-badge');
+  if(data.mqtt){
+    badge.innerHTML='<span class="w-2 h-2 rounded-full bg-primary animate-pulse"></span> MQTT Connected';
+    badge.className='flex items-center gap-2 bg-surface-container px-3 py-1.5 rounded-full text-primary font-mono text-xs';
+  }else{
+    badge.innerHTML='<span class="w-2 h-2 rounded-full bg-error"></span> MQTT Disconnected';
+    badge.className='flex items-center gap-2 bg-error-container px-3 py-1.5 rounded-full text-on-error-container font-mono text-xs';
+  }
+  document.getElementById('clock').textContent=new Date().toLocaleTimeString('zh-CN');
+  renderPC(data.pc, data.pc_updated_at);
+  renderDevices(data.devices);
+}
+
+function renderPC(pc, ts){
+  const el=document.getElementById('pc-card');
+  if(!pc||!pc.status){el.innerHTML='<h3 class="text-lg font-semibold text-on-surface border-b border-outline-variant pb-2">PC 状态</h3><div class="text-on-surface-variant text-sm">等待数据...</div>';return;}
+  const lm=pc.latest_message||{};
+  el.innerHTML=`<h3 class="text-lg font-semibold text-on-surface border-b border-outline-variant pb-2">PC 状态</h3>
+    <div class="flex items-center justify-between text-sm">
+      <span class="text-on-surface-variant">状态</span>
+      <div class="flex items-center gap-3">
+        ${statusBadge(pc.status)}
+        <span class="text-on-surface-variant">GIF ${pc.gif||'-'}</span>
+        <span class="text-on-surface-variant">Seq ${pc.seq||0}</span>
+      </div>
+    </div>
+    <div class="flex flex-col gap-1.5 font-mono text-xs text-on-surface">
+      <div class="flex justify-between border-b border-outline-variant/50 pb-1">
+        <span class="text-on-surface-variant">项目</span>
+        <span>${e(pc.project_key||'-')}</span>
+      </div>
+      <div class="flex justify-between border-b border-outline-variant/50 pb-1">
+        <span class="text-on-surface-variant">会话</span>
+        <span>${(pc.session_id||'-').slice(0,8)}...</span>
+      </div>
+      <div class="flex justify-between">
+        <span class="text-on-surface-variant">消息</span>
+        <span>${pc.msg_count||0}</span>
+      </div>
+    </div>
+    ${lm.text?`<div class="bg-surface-container-low rounded-lg p-2.5 flex items-start gap-2 mt-1">
+      <span class="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-xs font-semibold whitespace-nowrap mt-0.5">${e(lm.role||'')}</span>
+      <span class="text-on-surface text-sm">${e((lm.text||'').slice(0,120))}</span>
+    </div>`:''}
+    <div class="text-xs text-on-surface-variant text-right mt-1">更新: ${ft(ts)}</div>`;
+}
+
+function renderDevices(devs){
+  const el=document.getElementById('dev-card');
+  const keys=Object.keys(devs||{});
+  if(!keys.length){el.innerHTML='<h3 class="text-lg font-semibold text-on-surface border-b border-outline-variant pb-2">设备状态</h3><div class="text-on-surface-variant text-sm">无设备连接</div>';return;}
+  let html='<h3 class="text-lg font-semibold text-on-surface border-b border-outline-variant pb-2">设备状态</h3>';
+  for(const id of keys){
+    const d=devs[id];
+    const online=d.online
+      ?'<span class="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-semibold">在线</span>'
+      :'<span class="bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs font-semibold">离线</span>';
+    const ack=d.ack?`<div class="text-xs text-on-surface mt-1">Ack seq: <b>${d.ack.last_seq||'?'}</b> @ ${ft(d.ack.ts)}</div>`:'';
+    const borderColor=d.online?'border-green-200 bg-green-50/50':'border-error/20 bg-error/5';
+    html+=`<div class="border ${borderColor} rounded-lg p-3 flex flex-col gap-1">
+      <div class="flex items-center justify-between">
+        <span class="font-semibold text-on-surface text-sm">${e(id)}</span>
+        ${online}
+      </div>
+      ${ack}
+      <div class="text-xs text-on-surface-variant">ack: ${ft(d.ack_ts||'-')} · avail: ${ft(d.avail_ts||'-')}</div>
+    </div>`;
+  }
+  el.innerHTML=html;
+}
+
+let lastHistKey='';
+function renderHistory(items){
+  const el=document.getElementById('hist');
+  const key=items.map(h=>h.ts+(h.data?.speech?.id||'')).join(',');
+  if(key===lastHistKey)return;
+  lastHistKey=key;
+  document.getElementById('hist-count').textContent=`(${items.length})`;
+  let html='';
+  for(const h of [...items].reverse()){
+    const data=h.data||{};
+    const speech=data.speech||{};
+    const hasSpeech=!!speech.id;
+    const summary=[
+      `status=${data.status||'-'}`,
+      `gif=${data.gif||'-'}`,
+      `seq=${data.seq||0}`,
+    ].filter(Boolean).join(' · ');
+    const speechLine=hasSpeech
+      ?`<div class="mt-1 flex items-center gap-1.5 text-xs"><span class="material-symbols-outlined text-green-600" style="font-size:14px">volume_up</span><span class="text-green-700 font-medium">语音下发</span><span class="text-on-surface-variant">· ${e(speech.id.slice(0,12))}</span>${speech.text?`<span class="text-on-surface flex-1 overflow-hidden text-ellipsis whitespace-nowrap">· "${e(speech.text.slice(0,80))}"</span>`:''}</div>`
+      :'';
+    html+=`<div class="py-1.5 border-b border-outline-variant/20 hover:bg-surface-variant/30 px-2 rounded${hasSpeech?' bg-green-50/50':''}">
+      <div class="flex items-start gap-4">
+        <span class="text-blue-500 shrink-0 mt-0.5 font-semibold">→</span>
+        <span class="text-tertiary-container shrink-0 font-mono max-w-[280px] overflow-hidden text-ellipsis whitespace-nowrap">${e(h.topic)}</span>
+        <span class="text-primary flex-1 overflow-hidden text-ellipsis whitespace-nowrap">${e(summary)}</span>
+        <span class="text-on-surface-variant shrink-0 whitespace-nowrap">${ft(h.ts)}</span>
+      </div>
+      ${speechLine}
+    </div>`;
+  }
+  if(!html){
+    html='<div class="text-on-surface-variant font-sans text-sm p-4">还没有发往硬件的消息。</div>';
+  }
+  el.innerHTML=html;
+}
+
+let lastHookHistKey=null;
+function hookEventBadge(name){
+  const label=e(name||'Hook');
+  if(name==='PermissionRequest')return`<span class="bg-orange-100 text-orange-800 px-2 py-0.5 rounded text-xs font-semibold">${label}</span>`;
+  if(name==='PreToolUse')return`<span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-semibold">${label}</span>`;
+  if(name==='PostToolUse')return`<span class="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-semibold">${label}</span>`;
+  if(name==='Notification')return`<span class="bg-amber-100 text-amber-800 px-2 py-0.5 rounded text-xs font-semibold">${label}</span>`;
+  if(name==='Stop'||name==='SessionEnd')return`<span class="bg-gray-100 text-gray-700 px-2 py-0.5 rounded text-xs font-semibold">${label}</span>`;
+  return`<span class="bg-surface-container text-primary px-2 py-0.5 rounded text-xs font-semibold">${label}</span>`;
+}
+
+function compactProjectKey(projectKey){
+  if(!projectKey)return'-';
+  return projectKey.length>28?projectKey.slice(0,25)+'...':projectKey;
+}
+
+function renderHookHistory(items){
+  const hookItems=(items||[]).filter(h=>{
+    const data=h.data||{};
+    return data.source==='claude-hook';
+  });
+  const el=document.getElementById('hook-hist');
+  const key=hookItems.map(h=>`${h.ts}|${h.data?.seq||0}|${h.data?.hook_event_name||''}|${h.data?.source||''}`).join(',');
+  if(key===lastHookHistKey)return;
+  lastHookHistKey=key;
+  document.getElementById('hook-hist-count').textContent=`(${hookItems.length})`;
+
+  let html='';
+  for(const h of [...hookItems].reverse()){
+    const data=h.data||{};
+    const lm=data.latest_message||{};
+    const candidate=data.speech_candidate||{};
+    const eventName=data.hook_event_name||lm.hook_event_name||lm.type||'Hook';
+    const text=lm.text||lm.hook_message||data.hook_message||data.message||'';
+    const session=data.session_id?data.session_id.slice(0,8)+'...':'-';
+    const speechText=candidate.text||'';
+    html+=`<div class="rounded-lg border border-outline-variant/60 bg-surface-container-lowest p-3 hover:bg-surface-container-low transition-colors">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          ${hookEventBadge(eventName)}
+          ${statusBadge(data.status)}
+          <span class="text-on-surface-variant text-xs font-mono">seq ${data.seq||0}</span>
+        </div>
+        <span class="text-on-surface-variant text-xs font-mono">${ft(h.ts)}</span>
+      </div>
+      ${text?`<div class="mt-2 text-sm text-on-surface leading-snug line-clamp-2">${e(text.slice(0,180))}</div>`:`<div class="mt-2 text-sm text-on-surface-variant">无可展示文本</div>`}
+      ${speechText?`<div class="mt-2 rounded bg-primary/10 text-primary text-xs px-2 py-1 leading-snug">TTS 候选：${e(speechText.slice(0,140))}</div>`:''}
+      <div class="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs font-mono text-on-surface-variant">
+        <span>gif ${data.gif||'-'}</span>
+        <span>${e(compactProjectKey(data.project_key||''))}</span>
+        <span>${e(session)}</span>
+        <span>${data.permission_mode?e(data.permission_mode):'mode -'}</span>
+      </div>
+    </div>`;
+  }
+  if(!html){
+    html='<div class="text-on-surface-variant text-sm p-4 bg-surface-container-low rounded-lg">还没有收到来自本地 cc-dashboard 的 hook 状态同步。</div>';
+  }
+  el.innerHTML=html;
+}
+
+async function refreshState(){
+  const data=await api('/api/state');
+  if(data.ok)renderState(data);
+}
+
+let lastTtsHistKey=null;
+function renderTtsHistory(items){
+  const el=document.getElementById('tts-hist');
+  const key=items.map(h=>`${h.ts}|${h.data?.speech?.id||''}`).join(',');
+  if(key===lastTtsHistKey)return;
+  lastTtsHistKey=key;
+  document.getElementById('tts-hist-count').textContent=`(${items.length})`;
+  let html='';
+  for(const h of [...items].reverse()){
+    const data=h.data||{};
+    const speech=data.speech||{};
+    const speechText=speech.text||'';
+    const session=data.session_id?data.session_id.slice(0,8)+'...':'-';
+    html+=`<div class="rounded-lg border border-outline-variant/60 bg-surface-container-lowest p-3 hover:bg-surface-container-low transition-colors">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span class="inline-flex items-center gap-1 bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-semibold">TTS</span>
+          ${statusBadge(data.status)}
+          <span class="text-on-surface-variant text-xs font-mono">seq ${data.seq||0}</span>
+        </div>
+        <span class="text-on-surface-variant text-xs font-mono">${ft(h.ts)}</span>
+      </div>
+      ${speechText?`<div class="mt-2 flex items-center gap-1.5 text-sm"><span class="material-symbols-outlined text-green-600" style="font-size:14px">volume_up</span><span class="text-on-surface leading-snug">"${e(speechText.slice(0,160))}"</span></div>`:''}
+      ${speech.id?`<div class="mt-1 text-xs font-mono text-on-surface-variant">${e(speech.id.slice(0,20))}</div>`:''}
+      <div class="mt-2 grid grid-cols-3 gap-2 text-xs font-mono text-on-surface-variant">
+        <span>${e(compactProjectKey(data.project_key||''))}</span>
+        <span>${e(session)}</span>
+        <span>gif ${data.gif||'-'}</span>
+      </div>
+    </div>`;
+  }
+  if(!html){
+    html='<div class="text-on-surface-variant text-sm p-4 bg-surface-container-low rounded-lg">还没有 TTS 推送记录。</div>';
+  }
+  el.innerHTML=html;
+}
+
+async function refreshTtsHistory(){
+  const h=await api('/api/history?n=30&dir=tts');
+  if(h.ok)renderTtsHistory(h.history);
+}
+
+async function refreshHistory(){
+  const h=await api('/api/history?n=50&hardware=1');
+  if(h.ok){
+    const filtered=(h.history||[]).filter(item=>!(item.data&&item.data.speech&&item.data.speech.id));
+    renderHistory(filtered);
+  }
+}
+
+async function refreshHookHistory(){
+  const h=await api('/api/history?n=60&dir=recv&topic=whitebox%2Fpc%2Fstate');
+  if(h.ok)renderHookHistory(h.history);
+}
+
+refreshState();
+refreshHistory();
+refreshHookHistory();
+refreshTtsHistory();
+setInterval(refreshState, 500);
+setInterval(refreshHistory, 1500);
+setInterval(refreshHookHistory, 1500);
+setInterval(refreshTtsHistory, 2000);
+
+// ── 设备音量 ──
+const volSlider=document.getElementById('vol-slider');
+const volValue=document.getElementById('vol-value');
+const volStatus=document.getElementById('vol-status');
+volSlider.addEventListener('input',()=>{volValue.textContent=volSlider.value});
+async function loadVolume(){
+  try{const d=await api('/api/device/volume');if(d.ok){volSlider.value=d.volume;volValue.textContent=d.volume;}}catch(x){}
+}
+async function pushVolume(){
+  const vol=parseInt(volSlider.value);
+  volStatus.textContent='推送中...';
+  try{
+    const d=await fetch('/api/device/volume',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({volume:vol})});
+    const r=await d.json();
+    volStatus.textContent=r.ok?'已推送音量 '+vol:'推送失败: '+(r.error||'');
+  }catch(x){volStatus.textContent='请求失败: '+x.message}
+}
+loadVolume();
+
+// ── TTS 配置 ──
+const PROVIDER_MAP={
+  TTS_LOCAL_BASE_URL:'tts-local-url',TTS_LOCAL_PATH:'tts-local-path',
+  TTS_PROXY_URL:'tts-proxy-url',
+  TTS_CLOUD_BASE_URL:'tts-cloud-url',TTS_API_KEY:'tts-cloud-key',
+  TTS_CLOUD_MODEL:'tts-cloud-model',TTS_CLOUD_VOICE:'tts-cloud-voice',
+  DOUBAO_API_URL:'tts-doubao-url',DOUBAO_APP_ID:'tts-doubao-appid',
+  DOUBAO_ACCESS_KEY:'tts-doubao-key',DOUBAO_SPEAKER:'tts-doubao-speaker',
+  TTS_MOCK_AUDIO_PATH:'tts-mock-path',
+  MIMO_BASE_URL:'tts-mimo-url',MIMO_API_KEY:'tts-mimo-key',
+  MIMO_MODEL:'tts-mimo-model',
+};
+const SELECT_MAP={TTS_LOCAL_VOICE:'tts-local-voice',MIMO_VOICE:'tts-mimo-voice'};
+const GROUP_MAP={local_indextts:'grp-local',mqtt_indextts:'grp-local',cloud_openai_compatible:'grp-cloud',doubao:'grp-doubao',mimo:'grp-mimo',mock:'grp-mock'};
+
+function showTtsToast(msg,ok){
+  const el=document.createElement('div');
+  el.className='tts-toast '+(ok?'tts-toast-ok':'tts-toast-err');
+  el.textContent=msg;document.body.appendChild(el);
+  setTimeout(()=>el.remove(),3000);
+}
+
+function updateProviderGroup(){
+  const p=document.getElementById('tts-provider').value;
+  for(const[k,v]of Object.entries(GROUP_MAP)){
+    const el=document.getElementById(v);
+    if(el)el.classList.toggle('hidden',k!==p);
+  }
+}
+document.getElementById('tts-provider').addEventListener('change',updateProviderGroup);
+
+function fillTtsForm(s){
+  if(!s)return;
+  document.getElementById('tts-enabled').value=String(s.TTS_ENABLED!=='false'&&s.TTS_ENABLED!=='0');
+  document.getElementById('tts-orchestrator').value=s.TTS_ORCHESTRATOR||'off';
+  document.getElementById('tts-provider').value=s.TTS_PROVIDER||'local_indextts';
+  for(const[envKey,elId]of Object.entries(PROVIDER_MAP)){
+    const el=document.getElementById(elId);
+    if(el){
+      let val=s[envKey]||'';
+      if(val.endsWith('***')){val='';}
+      el.value=val;
+    }
+  }
+  for(const[envKey,elId]of Object.entries(SELECT_MAP)){
+    const el=document.getElementById(elId);
+    if(el&&s[envKey])el.value=s[envKey];
+  }
+  updateProviderGroup();
+  const localUrl=(s.TTS_LOCAL_BASE_URL||'').replace(/\/$/,'');
+  if(localUrl)refreshVoices(localUrl);
+}
+
+async function refreshVoices(baseUrl){
+  const url=baseUrl||document.getElementById('tts-local-url').value.replace(/\/$/,'');
+  if(!url)return;
+  const sel=document.getElementById('tts-local-voice');
+  sel.innerHTML='<option value="">加载中...</option>';
+  try{
+    const r=await fetch(url+'/voices',{cache:'no-store'});
+    const d=await r.json();
+    const voices=d.voices||[];
+    const cur=sel.dataset.pending||sel.value;
+    sel.innerHTML='';
+    for(const v of voices){
+      const opt=document.createElement('option');
+      opt.value=v.name;opt.textContent=v.name+' ('+v.size_mb+'MB)';
+      if(v.name===cur)opt.selected=true;
+      sel.appendChild(opt);
+    }
+    if(!voices.length)sel.innerHTML='<option value="">无可用 voice</option>';
+  }catch(x){
+    sel.innerHTML='<option value="">加载失败</option>';
+  }
+}
+
+async function loadTtsConfig(){
+  const data=await api('/api/tts/config');
+  if(!data.ok)return;
+  const badge=document.getElementById('tts-status-badge');
+  badge.innerHTML=data.enabled
+    ?'<span class="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-semibold font-mono">已启用</span>'
+    :'<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs font-semibold font-mono">已禁用</span>';
+  fillTtsForm(data.settings);
+}
+
+async function saveTtsConfig(){
+  const btn=document.getElementById('tts-save-btn');
+  btn.disabled=true;btn.textContent='保存中...';
+  const settings={};
+  settings.TTS_ENABLED=document.getElementById('tts-enabled').value;
+  settings.TTS_ORCHESTRATOR=document.getElementById('tts-orchestrator').value;
+  settings.TTS_PROVIDER=document.getElementById('tts-provider').value;
+  for(const[envKey,elId]of Object.entries(PROVIDER_MAP)){
+    const el=document.getElementById(elId);
+    if(el&&el.value)settings[envKey]=el.value;
+  }
+  for(const[envKey,elId]of Object.entries(SELECT_MAP)){
+    const el=document.getElementById(elId);
+    if(el&&el.value)settings[envKey]=el.value;
+  }
+  try{
+    const resp=await fetch('/api/tts/config',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({settings})});
+    const data=await resp.json();
+    if(data.ok){
+      showTtsToast('配置已保存并热加载',true);
+      fillTtsForm(data.settings);
+      const badge=document.getElementById('tts-status-badge');
+      badge.innerHTML=data.enabled
+        ?'<span class="bg-green-100 text-green-800 px-2 py-0.5 rounded text-xs font-semibold font-mono">已启用</span>'
+        :'<span class="bg-gray-100 text-gray-600 px-2 py-0.5 rounded text-xs font-semibold font-mono">已禁用</span>';
+    }else{
+      showTtsToast('保存失败: '+(data.error||'未知错误'),false);
+    }
+  }catch(x){showTtsToast('请求失败: '+x.message,false)}
+  btn.disabled=false;btn.textContent='保存配置';
+}
+
+async function testTts(){
+  const btn=document.getElementById('tts-test-btn');
+  btn.disabled=true;btn.textContent='测试中...';
+  try{
+    const resp=await fetch('/api/tts/speak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:'这是一条 TTS 测试语音',push_to_device:true})});
+    const data=await resp.json();
+    if(data.ok){
+      showTtsToast(data.pushed?'TTS 测试成功，已发送到硬件':'TTS 测试成功，硬件发送失败',!!data.pushed);
+      playTtsAudio(data.speech||data);
+    }else{showTtsToast('TTS 测试失败: '+(data.error||''),false)}
+  }catch(x){showTtsToast('请求失败: '+x.message,false)}
+  btn.disabled=false;btn.textContent='测试 TTS';
+}
+
+function playTtsAudio(speech){
+  const url=speech.audio_url||('/api/tts/audio/'+speech.id+'.mp3');
+  let el=document.getElementById('tts-audio-player');
+  if(!el){
+    el=document.createElement('audio');
+    el.id='tts-audio-player';
+    el.controls=true;
+    el.className='w-full max-w-[400px] h-9 mt-2';
+    document.querySelector('.tts-actions').appendChild(el);
+  }
+  el.src=url;
+  el.play().catch(()=>{});
+}
+
+loadTtsConfig();
+
+// ── Session 切换 + 路由模式 ──
+let currentRoute = {mode:'all', session_id:'', project_key:''};
+let uiMode = 'all';
+let routeInitialized = false;
+
+function updateModeButtons(){
+  const btnAll = document.getElementById('mode-all');
+  const btnSingle = document.getElementById('mode-single');
+  const hint = document.getElementById('route-hint');
+  const lockBtn = document.getElementById('lock-btn');
+  if(!btnAll || !btnSingle) return;
+
+  if(uiMode === 'single'){
+    btnAll.className = 'flex-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all text-on-surface-variant hover:bg-surface-container-highest';
+    btnSingle.className = 'flex-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all bg-primary text-on-primary shadow-sm';
+    if(lockBtn) lockBtn.style.display = '';
+    if(currentRoute.mode === 'single'){
+      const proj = (currentRoute.project_key||'').slice(0,20);
+      const sid = (currentRoute.session_id||'').slice(0,8);
+      hint.textContent = `已锁定: ${proj}/${sid}...`;
+      hint.className = 'text-xs text-primary font-medium';
+    } else {
+      hint.textContent = '选择一个 session 后点击「锁定所选」';
+      hint.className = 'text-xs text-on-surface-variant';
+    }
+  } else {
+    btnAll.className = 'flex-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all bg-primary text-on-primary shadow-sm';
+    btnSingle.className = 'flex-1 px-3 py-1.5 rounded-md text-xs font-semibold transition-all text-on-surface-variant hover:bg-surface-container-highest';
+    if(lockBtn) lockBtn.style.display = 'none';
+    hint.textContent = '竞争模式 — 谁先产生新 hook，ESP32 就显示谁的状态';
+    hint.className = 'text-xs text-on-surface-variant';
+  }
+}
+
+async function loadRoute(){
+  try{
+    const data = await api('/api/session/route');
+    if(data.ok && data.route){
+      currentRoute = data.route;
+      // 只在首次加载时同步 uiMode，之后由用户控制
+      if(!routeInitialized){
+        uiMode = currentRoute.mode;
+        routeInitialized = true;
+      }
+      updateModeButtons();
+    }
+  }catch(x){}
+}
+
+async function setRouteMode(mode){
+  uiMode = mode;
+  updateModeButtons();
+  if(mode === 'all'){
+    try{
+      const data = await api('/api/session/route', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({mode:'all'})
+      });
+      if(data.ok){
+        currentRoute = data.route;
+        showTtsToast('已切换到竞争模式', true);
+      }
+    }catch(x){
+      showTtsToast('切换失败: '+x.message, false);
+    }
+  }
+}
+
+async function lockSession(){
+  const sel = document.getElementById('session-select');
+  const sessionId = sel.value;
+  if(!sessionId){
+    showTtsToast('请先选择一个 session', false);
+    return;
+  }
+  const opt = sel.selectedOptions[0];
+  const projectKey = opt?.dataset?.project || '';
+  try{
+    const data = await api('/api/session/route', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({mode:'single', session_id:sessionId, project_key:projectKey})
+    });
+    if(data.ok){
+      currentRoute = data.route;
+      uiMode = 'single';
+      updateModeButtons();
+      const proj = projectKey.slice(0,20);
+      showTtsToast(`已锁定 ${proj}/${sessionId.slice(0,8)}...`, true);
+    } else {
+      showTtsToast('锁定失败: '+(data.error||''), false);
+    }
+  }catch(x){
+    showTtsToast('锁定失败: '+x.message, false);
+  }
+}
+
+async function loadSessions(){
+  const sel=document.getElementById('session-select');
+  sel.innerHTML='<option value="">加载中...</option>';
+  try{
+    const data=await api('/api/sessions');
+    if(!data.ok||!data.sessions.length){
+      sel.innerHTML='<option value="">等待 cc-dashboard 同步...</option>';
+      return;
+    }
+    sel.innerHTML='<option value="">-- 选择 Session --</option>';
+    for(const s of data.sessions){
+      const opt=document.createElement('option');
+      opt.value=s.session_id;
+      opt.dataset.project=s.project_key||'';
+      opt.dataset.source=s.source||'';
+      const src=s.source==='cc-dashboard'?'本地':'hook';
+      const proj=(s.project_key||'unknown').slice(0,24);
+      const sid=s.session_id.slice(0,8);
+      const time=s.mtime?new Date(s.mtime).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+      opt.textContent=`[${proj}] ${sid}... (${src}${time?', '+time:''})`;
+      sel.appendChild(opt);
+    }
+    // 如果是锁定模式，选中锁定的 session
+    if(currentRoute.mode==='single' && currentRoute.session_id){
+      const match = [...sel.options].find(o => o.value===currentRoute.session_id && (o.dataset.project||'')===currentRoute.project_key);
+      if(match) match.selected = true;
+    }
+    document.getElementById('session-status').textContent=`已同步 ${data.count} 个 session`;
+  }catch(x){
+    sel.innerHTML='<option value="">加载失败</option>';
+  }
+}
+
+async function pushSession(){
+  const sel=document.getElementById('session-select');
+  const sessionId=sel.value;
+  if(!sessionId){
+    showTtsToast('请先选择一个 session',false);
+    return;
+  }
+  const opt=sel.selectedOptions[0];
+  const projectKey=opt?.dataset.project||'';
+  const statusEl=document.getElementById('session-status');
+  statusEl.textContent='推送中...';
+  statusEl.className='text-xs text-amber-600';
+  try{
+    const resp=await fetch('/api/session/push',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({session_id:sessionId,project_key:projectKey}),
+    });
+    const data=await resp.json();
+    if(data.ok){
+      statusEl.textContent=`已推送: ${sessionId.slice(0,8)}...`;
+      statusEl.className='text-xs text-green-700';
+      showTtsToast('Session 已推送到设备',true);
+    }else{
+      statusEl.textContent='失败: '+(data.error||'');
+      statusEl.className='text-xs text-red-700';
+      showTtsToast('推送失败: '+(data.error||''),false);
+    }
+  }catch(x){
+    statusEl.textContent='请求失败: '+x.message;
+    statusEl.className='text-xs text-red-700';
+  }
+}
+
+loadRoute();
+loadSessions();
+setInterval(loadSessions, 30000);
+setInterval(loadRoute, 10000);
+</script>
+</body>
+</html>
